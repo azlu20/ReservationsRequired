@@ -93,16 +93,19 @@ class AutoReserveCourt:
             return None
         finally:
             if timeTableWait is None:
-                return None
+                print("should return none")
+                return None, None
 
             allTimes = timeTableWait.find_elements(By.TAG_NAME, "a")
             eastTimes = []
             westTimes = []
+            print("did not fail yet")
             for ele in allTimes:
                 if int(ele.get_attribute("l")) == 6:
                     eastTimes.append(''.join(ele.get_attribute("innerHTML").split()))
                 else:
                     westTimes.append(''.join(ele.get_attribute("innerHTML").split()))
+            print("is returning")
         return eastTimes, westTimes
 
     def validateCourt(self, date, time, duration):

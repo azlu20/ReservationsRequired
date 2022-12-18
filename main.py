@@ -32,11 +32,11 @@ import os
 
 from getpass import getpass
 
-from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QHBoxLayout, QPushButton, QFormLayout, QLineEdit, QCalendarWidget, QComboBox
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QHBoxLayout, QPushButton, QFormLayout, QLineEdit, QCalendarWidget, QComboBox, QGridLayout
 
 from PyQt6.QtGui import QTextCharFormat, QFont
 
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, QTimer, QTime
 
 from datetime import date
 
@@ -50,7 +50,7 @@ class Window(QWidget):
 
         super().__init__()
         self.credBank = CredentialBank()
-        self.initialize()
+
         self.site = AutoReserveCourt()
         self.loggedIn = False
         self.onPage = False
@@ -59,7 +59,22 @@ class Window(QWidget):
         self.selectedQDate = QDate.currentDate()
         self.time = None
         self.location = None
+        self.selectedTempQDate = None
+        self.selectedTempDate = None
+        self.temporaryDuration = "30"
+        self.temporaryTime = None
+        self.temporaryLocation = None
+        # self.timeLabel = QLabel(QTime.currentTime().toString())
+        # self.timerLabel = QLabel("No configuration selected at the moment")
+        self.timer = None
+        self.displayCurrentTimer = None
+        self.countDown = None
+        self.designatedTime = None
+        time = QTime().currentTime()
+        self.timeLabel = QLabel(time.toString() + "." + str(time.msec()))
 
+        self.first = True
+        self.initialize()
     def closeEvent(self, a) -> None:
         self.site.driver.quit()
 
@@ -67,9 +82,20 @@ class Window(QWidget):
         QWidget().setLayout(self.layout())
         self.initialize()
 
+    def updateTimeLabel(self):
+        sender = self.sender()
+        time = QTime().currentTime()
+        if(self.timeLabel is not None and self.atMain):
+            self.timeLabel.setText(time.toString() + "." + str(time.msec()))
+        else:
+            sender.stop()
+
     def initialize(self):
+        self.atMain = True
         updateLogin = QPushButton("Update Login")
         updateLogin.clicked.connect(self.LoginWindow)
+
+        self.timerLabel = QLabel("No configuration selected at the moment")
 
         checkLogin = QPushButton("Open Site")
         checkLogin.setObjectName("Open Site")
@@ -79,17 +105,34 @@ class Window(QWidget):
         setTime.setObjectName("set_time")
         setTime.clicked.connect(self.reserveCourtPage)
 
-        layout = QHBoxLayout()
+        layout = QGridLayout()
         layout.addWidget(updateLogin)
         layout.addWidget(checkLogin)
         layout.addWidget(setTime)
         layout.addWidget(QPushButton("Logout"))
 
+        timeLabelTimer = QTimer(self)
+        timeLabelTimer.start(1)
+        timeLabelTimer.timeout.connect(self.updateTimeLabel)
+        layout.addWidget(self.timeLabel)
+
+
+        timerLabelTimer = QTimer(self)
+        timerLabelTimer.start(1)
+        timerLabelTimer.timeout.connect(self.updateTimerLabel)
+        layout.addWidget(self.timerLabel)
+
         self.eventLabel = QLabel()
         self.eventLabel.setObjectName("eventLabel")
 
+
+
         self.setLayout(layout)
 
+        # self.time = "10:00pm"
+        # self.duration = "60"
+        #todo load in previously saved date/time/location if existed before and change timerlabel accordingly so
+        self.startTimeCountdown()
         self.resize(270, 110)
 
     def SetTimeWindow(self):
@@ -155,11 +198,12 @@ class Window(QWidget):
             self.loggedIn = self.initialLogin()
 
         self.onPage = self.site.goToReserveCourt()
-        layout = self.calendarLayout()
-        self.setLayout(layout)
+        self.dateChanged(QDate.currentDate())
+        # layout = self.calendarLayout()
+        # self.setLayout(layout)
 
     def calendarLayout(self):
-        QWidget().setLayout(self.layout())
+        self.atMain = False
         self.setWindowTitle("CPAC Info")
         layout = QFormLayout()
 
@@ -169,10 +213,9 @@ class Window(QWidget):
         dateFormat.setFont(QFont('Times', 15))
         # curDate = date.today().strftime("%m/%d/%Y")
         # curDateList = curDate.split("/")
-        calendarDate = self.selectedQDate
-        self.calendar.setDateTextFormat(calendarDate, dateFormat)
-        self.calendar.clicked.connect(self.dateChanged)
-
+        # calendarDate = self.selectedQDate
+        # self.calendar.setDateTextFormat(calendarDate, dateFormat)
+        self.calendar.clicked[QDate].connect(self.dateChanged)
         duration = QComboBox()
         duration.addItem("30")
         duration.addItem("60")
@@ -182,39 +225,112 @@ class Window(QWidget):
         duration.currentTextChanged.connect(self.durationChanged)
 
         layout.addWidget(self.calendar)
+
         layout.addWidget(duration)
+        # self.dateChanged()
         return layout
 
     def durationChanged(self, s):
-        self.duration = s
+        self.temporaryDuration = s
 
-    def dateChanged(self):
-        curDate = self.calendar.selectedDate()
-        self.selectedQDate = curDate
-        self.selectedDate = '{0}/{1}/{2}'.format(curDate.month(), curDate.day(), curDate.year())
-        eastTimes, westTimes = self.site.populateAvailableTimes(self.selectedDate, self.duration)
+    def dateChanged(self, date):
+        if(self.first):
+            QWidget().setLayout(self.layout())
         layout = self.calendarLayout()
-        if len(eastTimes) == 0 and len(westTimes)==0:
+        curDate = date
+        print(curDate)
+        self.selectedTempQDate = curDate
+        self.selectedTempDate = '{0}/{1}/{2}'.format(curDate.month(), curDate.day(), curDate.year())
+        eastTimes, westTimes = self.site.populateAvailableTimes(self.selectedTempDate, self.temporaryDuration)
+        print(eastTimes)
+        print(westTimes)
+        if (eastTimes is None and westTimes is None) or len(eastTimes) == 0 and len(westTimes)==0:
             self.eventLabel = QLabel("No available times")
             layout.addWidget(self.eventLabel)
+            self.setLayout(layout)
             return
 
-        for ele in eastTimes:
-            selectTime = QPushButton("East " + ele)
-            selectTime.setObjectName("East " + ele)
-            selectTime.clicked.connect(self.updateTime)
-            layout.addWidget(selectTime)
-        for ele in westTimes:
-            selectTime = QPushButton("West " + ele)
-            selectTime.setObjectName("West "+ ele)
-            selectTime.clicked.connect(self.updateTime)
-            layout.addWidget(selectTime)
-        self.setLayout(layout)
+        # for ele in eastTimes:
+        #     selectTime = QPushButton("East " + ele)
+        #     selectTime.setObjectName("East " + ele)
+        #     selectTime.clicked.connect(self.updateTime)
+        #     layout.addWidget(selectTime)
+        # for ele in westTimes:
+        #     selectTime = QPushButton("West " + ele)
+        #     selectTime.setObjectName("West "+ ele)
+        #     selectTime.clicked.connect(self.updateTime)
+        #     layout.addWidget(selectTime)
 
-    def updateTime(self):
+        confirmationButton = QPushButton("Confirmation")
+        confirmationButton.clicked.connect(self.confirmTimeLocation)
+        layout.addWidget(confirmationButton)
+        if(self.first):
+            self.setLayout(layout)
+            self.first = False
+
+    def confirmTimeLocation(self):
+        if self.temporaryTime and self.temporaryLocation and self.temporaryDuration and self.selectedTempQDate and self.selectedTempDate:
+            self.time = self.temporaryTime
+            self.location = self.temporaryLocation
+            self.duration = self.temporaryDuration
+            self.selectedQDate = self.selectedTempQDate
+            self.selectedDate = self.selectedTempQDate
+
+        #todo possibly pass a flag to timerlabel
+
+    def updateTime(self): #todo add confirmation, then set location to automatically l=6 or l=1. then will exit back to homepage
         splitName = self.sender().objectName().split(" ")
-        self.time =  splitName[1]
-        self.location = splitName[0]
+        self.temporaryTime = splitName[1]
+        self.temporaryLocation = splitName[0]
+
+    def startTimeCountdown(self):
+        if self.time is None or self.selectedDate is None or (self.duration is None):
+            self.timerLabel.setText(
+                "There is an issue with the set time, date, or duration. Please try again or select other times.")
+            return
+        if self.selectedQDate == QDate().currentDate():
+            self.timer = QTimer()
+            h = None
+            m = None
+            minuteFlag = -1
+            i = 0
+            if self.time[1] == ":":
+                h = self.time[0]
+                m = self.time[2] + self.time[3]
+            else:
+                h = self.time[0] + self.time[1]
+                m = self.time[3]+self.time[4]
+            if h is None or m is None or not h.isnumeric() or not m.isnumeric():
+                self.timerLabel.setText("Could not get a time from the selected time.")
+                return
+
+            if "pm" in self.time:
+                h = int(h) + 12
+            m = int(m)
+
+            self.designatedTime = QTime()
+            self.designatedTime.setHMS(h, m, 0)
+            currentTime = QTime.currentTime()
+            self.countDown = currentTime.msecsTo(self.designatedTime)
+            print(self.countDown)
+            if self.countDown < 0:
+                self.timerLabel.setText("Designated time is after current time. Please select a new time.")
+            else:
+                if self.countDown > 1000: # 7200000: two hours before in milliseconds
+                    #self.timer.singleShot(self.countDown+150, self.registerForCourt)
+
+                    self.timer.singleShot(1000, self.registerForCourt)
+
+    def updateTimerLabel(self):
+        sender = self.sender()
+        if self.countDown is not None and self.countDown > 0 and self.designatedTime is not None and self.atMain:
+            currentTime = QTime().currentTime()
+            print("should be changing")
+            self.timerLabel.setText("Timer set in place. Will activate in " + str(currentTime.msecsTo(self.designatedTime) + 150)) #Todo add msecs conversion back to h:m:s
+        else:
+            sender.stop()
+    def registerForCourt(self):
+        print("worked for now!")
         # self.resize(270, 110)
         # date = QDate()
 # class LoginWindow(QWidget):
