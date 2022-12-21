@@ -5,6 +5,8 @@ class CredentialBank():
     def __init__(self):
         self.usernameKey = "If you are looking at this, go away"
         self.serviceID = "CPAC_Court_Reservation"
+
+
     def storeCredentials(self, username, password):
         scrambled = self.pokdjscmvnxoii1(password)
         keyring.set_password(self.serviceID, username, scrambled)
@@ -52,3 +54,13 @@ class CredentialBank():
                 fmmk1ds91 += 1
                 qpijnvbcjhzi012y[qnjkvn9834yga[fmmk1ds91]] = chr(yfhzmxnbq + 32)
         return ''.join(list(filter(lambda xbcxm: False if xbcxm == 0 else True, qpijnvbcjhzi012y)))
+
+
+    def checkCredentialsExists(self):
+        exists = keyring.get_password(self.serviceID, self.usernameKey)
+        if exists:
+            proxy = keyring.get_password(self.serviceID, exists)
+            if proxy:
+                return True
+
+        return False

@@ -19,7 +19,7 @@ class AutoReserveCourt:
             )
 
         finally:
-            self.driver.quit()
+            # self.driver.quit()
             if element is None:
                 return False
 
@@ -54,7 +54,7 @@ class AutoReserveCourt:
             reserveCourt.click()
             reserveWait = None
             try:
-                reserveWait = WebDriverWait(self.driver, 10).until(
+                reserveWait = WebDriverWait(self.driver, 3).until(
                     EC.presence_of_element_located((By.ID, "reserve-court-new"))
                 )
             except:
@@ -69,6 +69,7 @@ class AutoReserveCourt:
         return False
 
     def populateAvailableTimes(self, date, duration):
+        self.driver.refresh() #important to fix the race condition getting stale elements (grabs old times-to-reserve)
         dateSelector = self.driver.find_element(By.ID, "date")
         dateSelector.clear()
         dateSelector.send_keys(date)
@@ -101,30 +102,63 @@ class AutoReserveCourt:
             westTimes = []
             print("did not fail yet")
             for ele in allTimes:
-                if int(ele.get_attribute("l")) == 6:
-                    eastTimes.append(''.join(ele.get_attribute("innerHTML").split()))
+                attributePosition = ele.get_attribute("l")
+                if int(attributePosition) == 1:
+                    eastVal = ele.get_attribute("innerHTML")
+                    if isinstance(eastVal, str):
+                        eastTimes.append(''.join(eastVal.split()))
                 else:
-                    westTimes.append(''.join(ele.get_attribute("innerHTML").split()))
+                    westVal = ele.get_attribute("innerHTML")
+                    if isinstance(westVal, str):
+                        westTimes.append(''.join(westVal.split()))
             print("is returning")
         return eastTimes, westTimes
+
+    def hurryConfirm(self):
+        confirmButton = self.driver.find_element(By.ID, "confirm")
+
+        if confirmButton:
+            confirmButton.click()
+            return True
+
+        return False
+    def safeClick(self):
+        invoiceLocator = self.driver.find_element(By.CLASS_NAME, "userbox")
+        invoices = invoiceLocator.find_elements(By.CLASS_NAME, "label")
+
+        for label in invoices:
+            if label.get_attribute("innerHTML") != "No Fee":
+                return False
+
+        confirmButton = self.driver.find_element(By.ID, "confirm")
+
+        if confirmButton:
+            confirmButton.click()
+            return True
+        return False
 
     def validateCourt(self, date, time, duration):
         attempts = 0
         # while attempts < self.maxAttempts:
         dateSelector = self.driver.find_element(By.ID, "date")
         dateSelector.clear()
-        dateSelector.send_keys("12/15/2022")
+        dateSelector.send_keys(date)
         dateSelector.click()
-
-        if (duration != "60"):
+        durationSelector = None
+        try:
             interval = "interval-" + duration
-            durationSelector = WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.ID, interval)))
-            durationSelector.click()
+            durationSelector = WebDriverWait(self.driver, 2).until(EC.element_to_be_clickable((By.ID, interval)))
+
+        except:
+            pass
+
+        finally:
+            print(durationSelector)
 
         self.driver.implicitly_wait(1)
         randomElement = self.driver.find_element(By.CLASS_NAME, "r-line")
         randomElement.click()  # just to get off calendar page
-
+        print("off search")
         searchButton = self.driver.find_element(By.ID, "reserve-court-search")
         searchButton.click()
         searchWait = None
@@ -137,11 +171,11 @@ class AutoReserveCourt:
         finally:
             if (searchWait is None):
                 return False
-
+            print("found time!")
             searchWait.click()
-
+        return True
     def login(self, username, password):
-        self.driver.get('https://cpac.clubautomation.com/event/reserve-court-new')
+        self.driver.get('https://cpac.clubautomation.com/')
         usernameField = self.driver.find_element(By.ID, "login")
         passwordField = self.driver.find_element(By.ID, "password")
         loginButton = self.driver.find_element(By.ID, "loginButton")
