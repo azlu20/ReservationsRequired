@@ -7,7 +7,7 @@ from cred_bank import CredentialBank
 
 class AutoReserveCourt:
     def __init__(self):
-        self.driver = webdriver.Firefox()
+        self.driver = webdriver.Chrome()
         self.maxAttempts = 3
         self.durationIndexMap = {"30": 0, "60": 1, "90": 2, "120":3}
     def checkLogin(self, username, password):

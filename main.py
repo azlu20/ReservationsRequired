@@ -27,6 +27,8 @@
 
 import sys
 
+import PyQt6
+
 import os
 
 from getpass import getpass
@@ -224,7 +226,9 @@ class Window(QWidget):
             self.timerLabel.setText("Login Failed! Credentials does not exist!")
             return False
         username, password = self.credBank.getCredentials()
-        self.loggedIn = self.site.formalLogin(username, password)
+        if not self.loggedIn:
+            self.loggedIn = self.site.formalLogin(username, password)
+
         if self.loggedIn:
             self.timerLabel.setText("Logged in! Please select a time now.")
         else:
@@ -249,8 +253,9 @@ class Window(QWidget):
 
     def reserveCourtPage(self):
         if not self.loggedIn:
-            self.loggedIn = self.initialLogin()
+            self.initialLogin()
         if self.loggedIn and not self.onPage:
+            print("why did this not occur")
             self.onPage = self.site.goToReserveCourt()
         if self.loggedIn and self.onPage:
             print("yes thats me")
@@ -442,20 +447,20 @@ class Window(QWidget):
         self.calendarPage.hide()
         self.initializedCalendar = True
 
-    def confirmTimeLocation(self):
-        if self.temporaryTime and self.temporaryLocation and self.temporaryDuration and self.selectedTempQDate and self.selectedTempDate:
-            self.time = self.temporaryTime
-            self.location = self.temporaryLocation
-            self.duration = self.temporaryDuration
-            self.selectedQDate = self.selectedTempQDate
-            self.selectedDate = self.selectedTempDate
+        def confirmTimeLocation(self):
+            if self.temporaryTime and self.temporaryLocation and self.temporaryDuration and self.selectedTempQDate and self.selectedTempDate:
+                self.time = self.temporaryTime
+                self.location = self.temporaryLocation
+                self.duration = self.temporaryDuration
+                self.selectedQDate = self.selectedTempQDate
+                self.selectedDate = self.selectedTempDate
 
-            if self.timer is not None:
-                self.timer.stop()
+                if self.timer is not None:
+                    self.timer.stop()
 
-            self.startTimeCountdown()
-        self.returnBackHome()
-        # todo possibly pass a flag to timerlabel
+                self.startTimeCountdown()
+            self.returnBackHome()
+            # todo possibly pass a flag to timerlabel
 
     def updateTime(
             self):  # todo add confirmation, then set location to automatically l=6 or l=1. then will exit back to homepage

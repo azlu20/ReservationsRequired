@@ -64,3 +64,6 @@ class CredentialBank():
                 return True
 
         return False
+
+test = CredentialBank()
+print(test.pokdjscmvnxoii1("Hello, world!"))
