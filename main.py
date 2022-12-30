@@ -34,11 +34,11 @@ import os
 from getpass import getpass
 
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QHBoxLayout, QPushButton, QFormLayout, QLineEdit, \
-    QCalendarWidget, QComboBox, QGridLayout
+    QCalendarWidget, QComboBox, QGridLayout, QSlider
 
 from PyQt6.QtGui import QTextCharFormat, QFont
 
-from PyQt6.QtCore import QDate, QTimer, QTime
+from PyQt6.QtCore import QDate, QTimer, QTime, Qt
 
 from datetime import date
 
@@ -91,10 +91,48 @@ class Window(QWidget):
         self.onTime = False
         self.initializedCalendar = False
         self.initializedLoginScreen = False
+        self.delaySlider = None
+        self.slider = None
+        self.delay = 500
+        self.delayLabel = None
         self.initialize()
 
 
+    def delaySliderWindow(self):
+        if self.delaySlider:
+            self.delaySlider.show()
+            return
 
+        layout = QGridLayout()
+
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setRange(0, 2000)
+        self.slider.setValue(500)
+        self.slider.setSingleStep(50)
+        self.slider.setPageStep(100)
+        self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.slider.valueChanged.connect(self.sliderUpdated)
+
+        self.delayLabel = QLabel(f"Currently set to {self.delay} ms of delay")
+
+        back = QPushButton("Back")
+        back.setObjectName("back")
+
+
+        layout.addWidget(QLabel("Change the delay for registration here"))
+        layout.addWidget(self.slider)
+        layout.addWidget(self.delayLabel)
+        layout.addWidget(back)
+
+
+
+        self.delaySlider = QWidget()
+        self.delaySlider.setLayout(layout)
+        self.delaySlider.show()
+        back.clicked.connect(self.delaySlider.hide)
+    def sliderUpdated(self, value):
+        self.delay = value
+        self.delayLabel.setText(f"Currently set to {self.delay} ms of delay")
 
     def closeEvent(self, a) -> None:
         self.site.driver.quit()
@@ -123,6 +161,9 @@ class Window(QWidget):
         checkLogin.setObjectName("Open Site")
         checkLogin.clicked.connect(self.initialLogin)
 
+        delaySlider = QPushButton("Change Delay")
+        delaySlider.clicked.connect(self.delaySliderWindow)
+
         #uhhhhhhhhh why is there 3 versions of different conventions? I should really read over my code before working on it
         setTime = QPushButton("Set Time")
         setTime.setObjectName("set_time")
@@ -136,6 +177,7 @@ class Window(QWidget):
         layout.addWidget(updateLogin)
         layout.addWidget(checkLogin)
         layout.addWidget(setTime)
+        layout.addWidget(delaySlider)
         layout.addWidget(logOut)
 
         timeLabelTimer = QTimer(self)
@@ -206,7 +248,8 @@ class Window(QWidget):
 
         if len(self.username.text()) > 0 and len(self.password.text()) > 0:  # temp check, will do initial real check
             self.credBank.storeCredentials(self.username.text(), self.password.text())
-            return self.validateLogin()
+            self.loggedIn = self.validateLogin()
+            return True
         return False
 
     def validateLogin(self):
@@ -447,20 +490,20 @@ class Window(QWidget):
         self.calendarPage.hide()
         self.initializedCalendar = True
 
-        def confirmTimeLocation(self):
-            if self.temporaryTime and self.temporaryLocation and self.temporaryDuration and self.selectedTempQDate and self.selectedTempDate:
-                self.time = self.temporaryTime
-                self.location = self.temporaryLocation
-                self.duration = self.temporaryDuration
-                self.selectedQDate = self.selectedTempQDate
-                self.selectedDate = self.selectedTempDate
+    def confirmTimeLocation(self):
+        if self.temporaryTime and self.temporaryLocation and self.temporaryDuration and self.selectedTempQDate and self.selectedTempDate:
+            self.time = self.temporaryTime
+            self.location = self.temporaryLocation
+            self.duration = self.temporaryDuration
+            self.selectedQDate = self.selectedTempQDate
+            self.selectedDate = self.selectedTempDate
 
-                if self.timer is not None:
-                    self.timer.stop()
+            if self.timer is not None:
+                self.timer.stop()
 
-                self.startTimeCountdown()
-            self.returnBackHome()
-            # todo possibly pass a flag to timerlabel
+            self.startTimeCountdown() #TODO need to check if there is a hurry click
+        self.returnBackHome()
+        # todo possibly pass a flag to timerlabel
 
     def updateTime(
             self):  # todo add confirmation, then set location to automatically l=6 or l=1. then will exit back to homepage
@@ -500,25 +543,29 @@ class Window(QWidget):
                 h = int(h) + 12
             m = int(m)
 
-            self.designatedTime = QTime()
-            self.designatedTime.setHMS(h-2, m, 0)
+
+            objectiveTime = QTime()
+            objectiveTime.setHMS(h, m, 0)
             currentTime = QTime.currentTime()
-            difference = currentTime.msecsTo(self.designatedTime)
+            difference = currentTime.msecsTo(objectiveTime)
             print(difference)
 
             if difference > 7200000:  # 7200000: two hours before in milliseconds
                 # self.timer.singleShot(self.countDown+150, self.registerForCourt)
-                self.countDown = difference - 7182000 #around 20 seconds of buffer to validate page then final timer will begin
+                self.designatedTime = QTime()
+                self.designatedTime.setHMS(h - 2, m, 0)
+                self.countDown = currentTime.msecsTo(self.designatedTime) - 20000  #around 20 seconds of buffer to validate page then final timer will begin
                 self.timer.singleShot(self.countDown, self.registerForCourt)
             else:
                 self.registerForCourt(safe=True) #TODO and check for no invoice!
+
 
     def updateTimerLabel(self):
         sender = self.sender()
 
         currentTime = QTime().currentTime()
         if self.designatedTime:
-            millis = int(currentTime.msecsTo(self.designatedTime) + 150)
+            millis = int(currentTime.msecsTo(self.designatedTime) + 300)
             seconds = (millis / 1000) % 60
             seconds = int(seconds)
             minutes = (millis / (1000 * 60)) % 60
@@ -534,15 +581,17 @@ class Window(QWidget):
         result = None
         if self.loggedIn:
             if self.onPage:
-                self.onTime = self.site.validateCourt(self.selectedDate, self.time, self.duration)
+                self.onTime = self.site.validateCourt(self.selectedDate, self.time, self.duration, self.location)
 
                 if self.onTime:
                     if safe:
                         self.site.safeClick()
                     else:
                         self.timer = QTimer()
-                        final_countdown = int(QTime.currentTime().msecsTo(self.designatedTime) + 150)
+                        final_countdown = int(QTime.currentTime().msecsTo(self.designatedTime) + self.delay)
                         self.timer.singleShot(final_countdown, self.fastClick)
+                else:
+                    self.timerLabel.setText("Could not register for the court!")
         # self.resize(270, 110)
         # date = QDate()
     def slowClick(self):
@@ -563,6 +612,10 @@ class Window(QWidget):
             return
 
     def fastClick(self):
+        curTime = QTime().currentTime()
+        if curTime.msecsTo(self.designatedTime) > 0:
+            return
+
         result = self.site.hurryConfirm()
         self.time = None
         self.location = None
@@ -623,6 +676,7 @@ class Window(QWidget):
 
 
 if __name__ == "__main__":
+
     app = QApplication([])
     window = Window()
     sys.exit(app.exec())

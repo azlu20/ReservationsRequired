@@ -124,20 +124,18 @@ class AutoReserveCourt:
         return False
     def safeClick(self):
         invoiceLocator = self.driver.find_element(By.CLASS_NAME, "userbox")
-        invoices = invoiceLocator.find_elements(By.CLASS_NAME, "label")
+        invoices = invoiceLocator.find_elements(By.CSS_SELECTOR, "div")
 
         for label in invoices:
-            if label.get_attribute("innerHTML") != "No Fee":
-                return False
+            if label.get_attribute("innerHTML") == "No Invoice":
+                confirmButton = self.driver.find_element(By.ID, "confirm")
 
-        confirmButton = self.driver.find_element(By.ID, "confirm")
-
-        if confirmButton:
-            confirmButton.click()
-            return True
+                if confirmButton:
+                    #confirmButton.click()
+                    return True
         return False
 
-    def validateCourt(self, date, time, duration):
+    def validateCourt(self, date, time, duration, location):
         attempts = 0
         # while attempts < self.maxAttempts:
         dateSelector = self.driver.find_element(By.ID, "date")
@@ -164,16 +162,26 @@ class AutoReserveCourt:
         searchWait = None
         try:
             searchWait = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.LINK_TEXT, time))
+                EC.element_to_be_clickable((By.LINK_TEXT, time)) #pseudo check to see if any elements are clickable also checks if the time even exists
             )
         except:
             return False
         finally:
             if (searchWait is None):
                 return False
-            print("found time!")
-            searchWait.click()
-        return True
+            both_time = self.driver.find_elements(By.LINK_TEXT, time)
+            found_time = None
+            for ele in both_time:
+                if location.lower() == "east" and int(ele.get_attribute("l")) == 1:
+                    found_time = ele
+                    break
+                if location.lower() == "west" and int(ele.get_attribute("l")) == 6:
+                    found_time = ele
+                    break
+            if found_time is not None:
+                found_time.click()
+                return True
+            return False
     def login(self, username, password):
         self.driver.get('https://cpac.clubautomation.com/')
         usernameField = self.driver.find_element(By.ID, "login")
